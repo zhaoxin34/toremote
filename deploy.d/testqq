@@ -1,0 +1,6 @@
+cd /data/apollo_target/
+rm -rf *
+tar xf ../apollo_qq_prod.20110302150340.tar 
+ls
+rsync -auv ./ /data/apollo_qq_prod
+

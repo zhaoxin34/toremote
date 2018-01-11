@@ -1,0 +1,22 @@
+#!/usr/bin/expect -f
+proc to_remote {remotes} {
+for {set i 0} {$i < [llength $remotes]} {incr i} {
+        set r [lindex $remotes $i]
+        if {$i==0} {
+                spawn ssh -p [lindex $r 3] -l [lindex $r 2] [lindex $r 1]
+                sleep 1
+        } else {
+                send "ssh -p [lindex $r 3] -l [lindex $r 2] [lindex $r 1]\r"
+        }
+        expect "Password:*"
+        send "[lindex $r 4]\r"
+        set app_name [lindex $r 0]
+        set dest_ip [lindex $r 1]
+        set ps_command "export PS1=\"\[\\u@$app_name \\e\[35;1m$dest_ip\\e\[0m\]: \\w\\n\$?>\""
+        send "$ps_command\r"
+        expect "*>"
+        if {$i==[llength $remotes]-1} {
+               interact
+        }
+}
+}

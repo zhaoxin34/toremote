@@ -1,0 +1,88 @@
+#!/usr/bin/expect -f
+set cur_dir [lindex $argv 0]
+set app_name [lindex $argv 1]
+set source_dir [lindex $argv 2]
+
+proc to_remote {deploy_center hosts source_file} {
+	spawn sftp -oPort=[lindex $deploy_center 3] [lindex $deploy_center 2]@[lindex $deploy_center 1]
+	sleep 1
+	expect "Password:*"
+	send "[lindex $deploy_center 4]\r"
+	expect "sftp>*"
+	send "cd [lindex $deploy_center 5]\r"
+	expect "sftp>*"
+#	send "put $source_file\r"
+#	expect "sftp>*"
+	send "exit\r"
+	expect ">*"
+
+	#login to deploy center
+	spawn ssh -p [lindex $deploy_center 3] -l [lindex $deploy_center 2] [lindex $deploy_center 1]
+	sleep 1
+	expect "Password:*"
+        send "[lindex $deploy_center 4]\r"
+	sleep 1
+	set app_name [lindex $deploy_center 0]
+        set dest_ip [lindex $deploy_center 1]
+        set ps_command "export PS1=\"\[\\u@$app_name \\e\[35;1m$dest_ip\\e\[0m\]: \\w\\n\$?>\""
+        send "$ps_command\r"
+        expect "*>"
+
+	for {set i 0} {$i < [llength $hosts]} {incr i} {
+		set host [lindex $hosts $i]
+		send "sftp -oPort=[lindex $host 3] [lindex $host 2]@[lindex $host 1]\r"
+		expect "Password:*"
+		send "[lindex $host 4]\r"
+		expect "sftp>*"
+		send "cd [lindex $host 5]\r"
+		expect "sftp>*"
+		send "put [lindex $deploy_center 5]/*.tar\r"
+		expect "sftp>*"
+		send "quit\r"
+		expect ">*"
+	}
+
+	for {set i 0} {$i < [llength $hosts]} {incr i} {
+                set host [lindex $hosts $i]
+                send "ssh -p[lindex $host 3] -l [lindex $host 2] [lindex $host 1]\r"
+                expect "Password:*"
+		send "[lindex $host 4]\r"
+		set app_name [lindex $host 0]
+		set dest_ip [lindex $host 1]
+		set ps_command "export PS1=\"\[\\u@$app_name \\e\[35;1m$dest_ip\\e\[0m\]: \\w\\n\$?>\""
+		send "$ps_command\r"
+		expect "*>"
+		send "cd [lindex $host 5]\r"
+		expect "*>"
+		send "mv *.tar apollo.tar\r"
+		expect "*>"
+		send "tar xvf apollo.tar\r"
+		expect "*>"
+		send "rsync -auv ./ /data/apollo_qq_prod\r"
+		expect "*>"
+		send "exit\r"
+		expect "*>"
+        }
+	interact
+}
+
+proc get_arr_from_file {file_name} {
+	set file [open "$file_name" r]
+	set arr {}
+	while { [gets $file line] >= 0 } {
+		lappend arr $line
+	}
+	return $arr
+}
+
+set deploy_center [get_arr_from_file "$cur_dir/${app_name}_deploy_center"]
+set deploy_center [lindex $deploy_center 0]
+set hosts [get_arr_from_file "$cur_dir/${app_name}_hosts"]
+
+#for {set i 0} {$i<[llength $remotes]} {incr i} {
+#	set l [lindex $remotes $i]
+#	puts "$l"
+#	puts "[lindex $l 0] [lindex $l 1]"
+#}
+
+to_remote $deploy_center $hosts $source_dir

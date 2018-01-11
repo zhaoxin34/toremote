@@ -1,0 +1,86 @@
+#!/usr/bin/expect -f
+set cur_dir [lindex $argv 0]
+set app_name [lindex $argv 1]
+
+proc to_remote {remotes remote_command} {
+    set sudo 0
+    set timeout 15
+    for {set i 0} {$i < [llength $remotes]} {incr i} {
+            set r [lindex $remotes $i]
+            if {$i==0} {
+                    spawn ssh -p [lindex $r 3] -l [lindex $r 2] [lindex $r 1]
+            } else {
+		    if {$sudo == 1} {
+			send "sudo ssh -p [lindex $r 3] -l [lindex $r 2] [lindex $r 1]\r"
+		    } else {
+                        send "ssh -p [lindex $r 3] -l [lindex $r 2] [lindex $r 1]\r"
+		    }
+            }
+	    set username [lindex $r 2]
+	    set password [lindex $r 4]
+	   # if {[string compare "$username" "root"]==0} {
+	   #     set sudo 0
+	   # } else {
+	   #     set sudo 1
+	   # }
+            sleep 1
+            if {[string compare "$password" ""]!=0} {
+	        for {} {1} {} {
+                   expect {
+                       "*(yes/no)*" {send "yes\n"}
+                       "*assword*" {send "$password\n"}
+	               -re "(%|#|\\$|@).*" {break}
+                   }
+	        }
+	    } else {
+                   expect {
+                       -re "(%|#|\\$|@).*" 
+		   }
+            }
+            set app_name [lindex $r 0]
+            set dest_ip [lindex $r 1]
+            if {$i==[llength $remotes]-1} {
+                if {[llength $remote_command]!=0} {
+                    for {set j 0} {$j<[llength $remote_command]} {incr j} {
+                        set command [lindex $remote_command $j]
+                        send "$command\n"
+                    }
+                } else {
+	            #set ps_command "export PS1=\"\[$username@$app_name \\e\[32;1m\`/sbin/ifconfig|egrep -A 1 'eth0\\s|eth1\\s'| grep inet| awk '{print \$2}' | sed -e 's/addr://' |grep -v '127.0.0.1'| grep -v '0.0.0.0'| awk '{printf(\"<%s>\", \$1)}'\`\\e\[0m\]: \\w\\n\$?>\""
+                    #send "$ps_command\r"
+	            #expect "*>"
+                }
+                interact
+            } 
+    }
+}
+
+proc get_arr_from_file {file_name} {
+        if {! [file exists "$file_name"]} {
+            return {}
+        }
+	set file [open "$file_name" r]
+	set arr {}
+	while { [gets $file line] >= 0 } {
+		lappend arr $line
+	}
+	return $arr
+}
+
+set remotes [get_arr_from_file "$cur_dir/$app_name"]
+set remote_command {} 
+if { [llength $argv] >=3 } {
+    set command_file [lindex $argv 2]
+    # puts $command_file
+    set remote_command [get_arr_from_file "$cur_dir/$command_file"]
+    # puts $remote_command
+}
+# puts $remote_command
+
+#for {set i 0} {$i<[llength $remotes]} {incr i} {
+#	set l [lindex $remotes $i]
+#	puts "$l"
+#	puts "[lindex $l 0] [lindex $l 1]"
+#}
+
+to_remote $remotes $remote_command
